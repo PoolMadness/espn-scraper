@@ -67,7 +67,14 @@ module ESPN
   # }
   
   class << self
-    
+
+    def get_superbowl_score
+      markup = Scores.markup_from_superbowl
+      scores = Scores.home_away_parse(markup)
+      add_league_and_fixes(scores, 'nfl')
+      scores
+    end
+
     def get_nfl_scores(year, week)
       markup = Scores.markup_from_year_and_week('nfl', year, week)
       scores = Scores.home_away_parse(markup)
@@ -131,7 +138,11 @@ module ESPN
     class << self
     
       # Get Markup
-    
+
+      def markup_from_superbowl
+        ESPN.get 'scores', 'nfl', "scoreboard/_/group/80/year/2015/seasontype/3/week/5"
+      end
+
       def markup_from_year_and_week(league, year, week)
         ESPN.get 'scores', league, "scoreboard/_/group/80/year/#{year}/seasontype/2/week/#{week}"
       end

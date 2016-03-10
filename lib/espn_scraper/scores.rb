@@ -179,7 +179,8 @@ module ESPN
           # Game must be regular or postseason
           next unless game['season']['type'] == SEASONS[:regular_season] || game['season']['type'] == SEASONS[:postseason]
           score = {}
-
+          competition = game['competitions'].first
+          
           # Score must be final
           if final && competition['status']['type']['detail'] =~ /^Final/
             competition['competitors'].each do |competitor|

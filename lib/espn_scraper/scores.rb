@@ -70,7 +70,7 @@ module ESPN
 
     def get_superbowl_score
       markup = Scores.markup_from_superbowl
-      scores = Scores.home_away_parse(markup)
+      scores = Scores.home_away_parse(markup, false)
       add_league_and_fixes(scores, 'nfl')
       scores
     end
@@ -112,8 +112,13 @@ module ESPN
     
     alias_method :get_college_football_scores, :get_ncf_scores
     
-    def get_ncb_scores(date, conference_id)
-      markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
+    def get_ncb_scores(date, conference_id=nil)
+      if conference_id
+        markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
+      else
+        markup = Scores.markup_from_date('ncb', date)
+      end
+
       scores = Scores.home_away_parse(markup)
       scores.each { |report| report.merge! league: 'mens-college-basketball', game_date: date }
       scores
@@ -159,7 +164,7 @@ module ESPN
     
       # parsing strategies
     
-      def home_away_parse(doc)
+      def home_away_parse(doc, final=true)
         scores = []
         games = []
         espn_regex = /window\.espn\.scoreboardData \t= (\{.*?\});/
@@ -174,9 +179,9 @@ module ESPN
           # Game must be regular or postseason
           next unless game['season']['type'] == SEASONS[:regular_season] || game['season']['type'] == SEASONS[:postseason]
           score = {}
-          competition = game['competitions'].first
+
           # Score must be final
-          #if competition['status']['type']['detail'] =~ /^Final/
+          if final && competition['status']['type']['detail'] =~ /^Final/
             competition['competitors'].each do |competitor|
               if competitor['homeAway'] == 'home'
                 score[:home_team] = competitor['team']['abbreviation'].downcase
@@ -188,7 +193,7 @@ module ESPN
             end
             score[:game_date] = DateTime.parse(game['date'])
             scores << score
-          #end
+          end
         end
         scores
       end

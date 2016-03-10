@@ -4,9 +4,9 @@ require 'json'
 
 module ESPN
   SEASONS = {
-    preseason: 1,
-    regular_season: 2,
-    postseason: 3
+      preseason: 1,
+      regular_season: 2,
+      postseason: 3
   }
 
   mlb_ignores = %w( 
@@ -15,45 +15,45 @@ module ESPN
     round-rock carolina manatee-cc mexico cincinnati-(f) atlanta-(f) frisco toledo norfolk
     fort-myers tampa-bay-(f) nl-all-stars al-all-stars
   )
-  
+
   nba_ignores = %w( west-all-stars east-all-stars )
-  
+
   nhl_ignores = %w(
     hc-sparta frolunda hc-slovan ev-zug jokerit-helsinki hamburg-freezers adler-mannheim
     team-chara team-alfredsson
   )
-  
+
   ncf_ignores = %w( paul-quinn san-diego-christian ferris-st notre-dame-college chaminade 
     w-new-mexico n-new-mexico tx-a&m-commerce nw-oklahoma-st )
-  
-  IGNORED_TEAMS = (mlb_ignores + nhl_ignores + nba_ignores + ncf_ignores).inject({}) do |h, team| 
-    h.merge team => false 
+
+  IGNORED_TEAMS = (mlb_ignores + nhl_ignores + nba_ignores + ncf_ignores).inject({}) do |h, team|
+    h.merge team => false
   end
-    
+
   DATA_NAME_EXCEPTIONS = {
-    'nets' => 'bkn',
-    'supersonics' => 'okc',
-    'hornets' => 'no',
-    
-    'marlins' => 'mia'
+      'nets' => 'bkn',
+      'supersonics' => 'okc',
+      'hornets' => 'no',
+
+      'marlins' => 'mia'
   }.merge(IGNORED_TEAMS)
-  
+
   DATA_NAME_FIXES = {
-    'nfl' => {
-      'nwe' => 'ne',
-      'kan' => 'kc',
-      'was' => 'wsh',
-      'nor' => 'no',
-      'gnb' => 'gb',
-      'sfo' => 'sf',
-      'tam' => 'tb',
-      'sdg' => 'sd'
-    },
-    'mlb' => {},
-    'nba' => {},
-    'nhl' => {},
-    'ncf' => {},
-    'ncb' => {}
+      'nfl' => {
+          'nwe' => 'ne',
+          'kan' => 'kc',
+          'was' => 'wsh',
+          'nor' => 'no',
+          'gnb' => 'gb',
+          'sfo' => 'sf',
+          'tam' => 'tb',
+          'sdg' => 'sd'
+      },
+      'mlb' => {},
+      'nba' => {},
+      'nhl' => {},
+      'ncf' => {},
+      'ncb' => {}
   }
 
   # Example output:
@@ -65,7 +65,7 @@ module ESPN
   #   away_team: "min",
   #   away_score: 27
   # }
-  
+
   class << self
 
     def get_superbowl_score
@@ -81,37 +81,37 @@ module ESPN
       add_league_and_fixes(scores, 'nfl')
       scores
     end
-    
+
     def get_mlb_scores(date)
       markup = Scores.markup_from_date('mlb', date)
       scores = Scores.home_away_parse(markup)
       scores.each { |report| report[:league] = 'mlb' }
       scores
     end
-    
+
     def get_nba_scores(date)
       markup = Scores.markup_from_date('nba', date)
       scores = Scores.home_away_parse(markup)
       scores.each { |report| report[:league] = 'nba' }
       scores
     end
-    
+
     def get_nhl_scores(date)
       markup = Scores.markup_from_date('nhl', date)
       scores = Scores.winner_loser_parse(markup, date)
       scores.each { |report| report[:league] = 'nhl' }
       scores
     end
-    
+
     def get_ncf_scores(year, week)
       markup = Scores.markup_from_year_and_week('college-football', year, week)
       scores = Scores.ncf_parse(markup)
       scores.each { |report| report[:league] = 'college-football' }
       scores
     end
-    
+
     alias_method :get_college_football_scores, :get_ncf_scores
-    
+
     def get_ncb_scores(date, conference_id=nil)
       if conference_id
         markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
@@ -123,9 +123,16 @@ module ESPN
       scores.each { |report| report.merge! league: 'mens-college-basketball', game_date: date }
       scores
     end
-    
+
     alias_method :get_college_basketball_scores, :get_ncb_scores
-    
+
+    def get_ncb_abbreviations(date)
+      markup = Scores.markup_from_date('ncb', date)
+
+      teams = Scores.team_abbreviation_parse(markup)
+      teams
+    end
+
     def add_league_and_fixes(scores, league)
       scores.each do |report|
         report[:league] = league
@@ -135,13 +142,13 @@ module ESPN
         end
       end
     end
-  end  
+  end
 
 
 
   module Scores
     class << self
-    
+
       # Get Markup
 
       def markup_from_superbowl
@@ -151,7 +158,7 @@ module ESPN
       def markup_from_year_and_week(league, year, week)
         ESPN.get 'scores', league, "scoreboard/_/group/80/year/#{year}/seasontype/2/week/#{week}"
       end
-    
+
       def markup_from_date(league, date)
         day = date.to_s.gsub(/[^\d]+/, '')
         ESPN.get 'scores', league, "scoreboard?date=#{ day }"
@@ -161,9 +168,9 @@ module ESPN
         day = date.to_s.gsub(/[^\d]+/, '')
         ESPN.get league, 'scoreboard', '_', 'group', conference_id.to_s, 'date', day
       end
-    
+
       # parsing strategies
-    
+
       def home_away_parse(doc, final=true)
         scores = []
         games = []
@@ -180,7 +187,7 @@ module ESPN
           next unless game['season']['type'] == SEASONS[:regular_season] || game['season']['type'] == SEASONS[:postseason]
           score = {}
           competition = game['competitions'].first
-          
+
           # Score must be final
           if final && competition['status']['type']['detail'] =~ /^Final/
             competition['competitors'].each do |competitor|
@@ -198,7 +205,28 @@ module ESPN
         end
         scores
       end
-      
+
+      def team_abbreviation_parse(doc)
+        games = []
+        teams = {}
+        espn_regex = /window\.espn\.scoreboardData \t= (\{.*?\});/
+        doc.xpath("//script").each do |script_section|
+          if script_section.content =~ espn_regex
+            espn_data = JSON.parse(espn_regex.match(script_section.content)[1])
+            games = espn_data['events']
+            break
+          end
+        end
+        games.each do |game|
+          competition = game['competitions'].first
+          competition['competitors'].each do |competitor|
+            teams[competitor['team']['displayName']] = competitor['team']['abbreviation'].downcase
+          end
+        end
+
+        teams
+      end
+
       def ncf_parse(doc)
         scores = []
         games = []
@@ -222,7 +250,7 @@ module ESPN
               if competitor['homeAway'] == 'home'
                 score[:home_team] = competitor['team']['id'].downcase
                 score[:home_score] = competitor['score'].to_i
-                else
+              else
                 score[:away_team] = competitor['team']['id'].downcase
                 score[:away_score] = competitor['score'].to_i
               end
@@ -232,7 +260,7 @@ module ESPN
         end
         scores
       end
-    
+
       def winner_loser_parse(doc, date)
         doc.css('.mod-scorebox-final').map do |game|
           game_info = { game_date: date }
@@ -243,9 +271,9 @@ module ESPN
           game_info
         end
       end
-    
+
       # parsing helpers
-    
+
       def parse_data_name_from(container)
         if container.at_css('a')
           link = container.at_css('a')['href']
@@ -261,7 +289,7 @@ module ESPN
           ESPN::DATA_NAME_EXCEPTIONS[ ESPN.dasherize(name) ]
         end
       end
-    
+
       def data_name_from(link)
         encoded_link = URI::encode(link.strip)
         query = URI::parse(encoded_link).query
@@ -271,7 +299,7 @@ module ESPN
           link.split('/')[-2]
         end
       end
-    
+
     end
   end
 end

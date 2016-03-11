@@ -112,15 +112,20 @@ module ESPN
 
     alias_method :get_college_football_scores, :get_ncf_scores
 
-    def get_ncb_scores(date, conference_id=nil)
+    def get_ncb_scores(date, conference_id=nil, final_only=true)
       if conference_id
         markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
       else
         markup = Scores.markup_from_date('ncb', date)
       end
 
-      scores = Scores.home_away_parse(markup)
-      scores.each { |report| report.merge! league: 'mens-college-basketball', game_date: date }
+      scores = Scores.home_away_parse(markup, final_only)
+
+      scores.each do |report|
+        report[:league] ||= 'mens-college-basketball'
+        report[:game_date] ||= date
+      end
+
       scores
     end
 
@@ -189,7 +194,7 @@ module ESPN
           competition = game['competitions'].first
 
           # Score must be final
-          if final && competition['status']['type']['detail'] =~ /^Final/
+          if !final || competition['status']['type']['detail'] =~ /^Final/
             competition['competitors'].each do |competitor|
               if competitor['homeAway'] == 'home'
                 score[:home_team] = competitor['team']['abbreviation'].downcase
@@ -200,6 +205,7 @@ module ESPN
               end
             end
             score[:game_date] = DateTime.parse(game['date'])
+            score[:status] = competition['status']['type']['detail']
             scores << score
           end
         end

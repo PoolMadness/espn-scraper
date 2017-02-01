@@ -157,7 +157,7 @@ module ESPN
       # Get Markup
 
       def markup_from_superbowl
-        ESPN.get 'scores', 'nfl', "scoreboard/_/group/80/year/2015/seasontype/3/week/5"
+        ESPN.get 'scores', 'nfl', "scoreboard/_/group/80/year/#{Time.now.year - 1}/seasontype/3/week/5"
       end
 
       def markup_from_year_and_week(league, year, week)

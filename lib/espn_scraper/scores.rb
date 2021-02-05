@@ -68,10 +68,9 @@ module ESPN
   # }
 
   class << self
-
-    def get_nfl_scores(year, week)
-      markup = Scores.markup_from_year_and_week('nfl', year, week)
-      scores = Scores.home_away_parse(markup)
+    def get_nfl_scores(year, week, playoffs=false)
+      markup = Scores.markup_from_year_and_week('nfl', year, week, nil, playoffs)
+      scores = Scores.home_away_parse(markup, nil, false)
       add_league_and_fixes(scores, 'nfl')
       scores
     end
@@ -106,14 +105,27 @@ module ESPN
 
     alias_method :get_college_football_scores, :get_ncf_scores
 
-    def get_ncb_scores(date, conference_id)
-      markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
-      scores = Scores.home_away_parse(markup, date)
-      scores.each { |report| report.merge! league: 'mens-college-basketball', game_date: date }
+    def get_ncb_scores(date, conference_id=nil, final_only=true)
+      if conference_id
+        markup = Scores.markup_from_date_and_conference('ncb', date, conference_id)
+      else
+        markup = Scores.markup_from_date('ncb', date)
+      end
+
+      scores = Scores.home_away_parse(markup, nil, final_only)
+      scores.each { |report| report.merge! league: 'mens-college-basketball' }
+
       scores
     end
 
     alias_method :get_college_basketball_scores, :get_ncb_scores
+
+    def get_ncb_abbreviations(date)
+      markup = Scores.markup_from_date('ncb', date)
+
+      teams = Scores.team_abbreviation_parse(markup)
+      teams
+    end
 
     def add_league_and_fixes(scores, league)
       scores.each do |report|
@@ -133,11 +145,13 @@ module ESPN
 
       # Get Markup
 
-      def markup_from_year_and_week(league, year, week, group=nil)
+      def markup_from_year_and_week(league, year, week, group=nil, playoffs=false)
+        seasontype = playoffs ? 3 : 2
+
         if group
-          ESPN.get 'scores', league, "scoreboard/_/group/#{group}/year/#{year}/seasontype/2/week/#{week}"
+          ESPN.get 'scores', league, "scoreboard/_/group/#{group}/year/#{year}/seasontype/#{seasontype}/week/#{week}"
         else
-          ESPN.get 'scores', league, "scoreboard/_/year/#{year}/seasontype/2/week/#{week}"
+          ESPN.get 'scores', league, "scoreboard/_/year/#{year}/seasontype/#{seasontype}/week/#{week}"
         end
       end
 
@@ -152,8 +166,7 @@ module ESPN
       end
 
       # parsing strategies
-
-      def home_away_parse(doc, date=nil)
+      def home_away_parse(doc, date=nil, final=true)
         scores = []
         games = []
         espn_regex = /window\.espn\.scoreboardData \t= (\{.*?\});/
@@ -175,8 +188,9 @@ module ESPN
 
           score = {}
           competition = game['competitions'].first
+
           # Score must be final
-          if competition['status']['type']['detail'] =~ /^Final/
+          if !final || competition['status']['type']['detail'] =~ /^Final/
             competition['competitors'].each do |competitor|
               if competitor['homeAway'] == 'home'
                 score[:home_team] = competitor['team']['abbreviation'].downcase
@@ -187,10 +201,32 @@ module ESPN
               end
             end
             score[:game_date] = DateTime.parse(game['date'])
+            score[:status] = competition['status']['type']['detail']
             scores << score
           end
         end
         scores
+      end
+
+      def team_abbreviation_parse(doc)
+        games = []
+        teams = {}
+        espn_regex = /window\.espn\.scoreboardData \t= (\{.*?\});/
+        doc.xpath("//script").each do |script_section|
+          if script_section.content =~ espn_regex
+            espn_data = JSON.parse(espn_regex.match(script_section.content)[1])
+            games = espn_data['events']
+            break
+          end
+        end
+        games.each do |game|
+          competition = game['competitions'].first
+          competition['competitors'].each do |competitor|
+            teams[competitor['team']['displayName']] = competitor['team']['abbreviation'].downcase
+          end
+        end
+
+        teams
       end
 
       def ncf_parse(doc)
@@ -216,7 +252,7 @@ module ESPN
               if competitor['homeAway'] == 'home'
                 score[:home_team] = competitor['team']['id'].downcase
                 score[:home_score] = competitor['score'].to_i
-                else
+              else
                 score[:away_team] = competitor['team']['id'].downcase
                 score[:away_score] = competitor['score'].to_i
               end
